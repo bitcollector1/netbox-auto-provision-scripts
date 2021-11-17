@@ -1,0 +1,10 @@
+---
+inventory:
+  plugin: NetBoxInventory2
+  options:
+    ssl_verify: /etc/ssl/certs
+    filter_parameters: {"role": "minios", "status": "staged",}
+    use_platform_napalm_driver: False
+    
+runner:
+  plugin: serial
