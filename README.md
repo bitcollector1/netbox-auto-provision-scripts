@@ -6,4 +6,4 @@ Two scripts were created to import servers into NetBox. All hosts should have LL
 this info into your /etc/hosts file so that you don't need to have valid DNS entries for the next script. 
 
 2) Gather all facts about a server and add them to NetBox. This includes manafucturer, product type, serial number, asset tags, ethernet interface and IP
-BMC interface and IP and it will also make the interface connections in NetBox based of LLDP information it finds. 
+BMC interface and IP and it will also make the interface connections in NetBox based of LLDP information it finds so that you will be able to see the active LLDP  connections in NetBox GUI.
