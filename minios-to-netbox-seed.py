@@ -74,7 +74,7 @@ for k in interfaces.keys():
     remote_system = interfaces[k][0]['remote_system_name']
 
     if remote_system is not None:
-        if 'node' in remote_system:
+        if 'minios' in remote_system:
             remote_system = remote_system.replace(domain_extension, " ")
 
             for i in arp_table:
