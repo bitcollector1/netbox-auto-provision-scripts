@@ -2,7 +2,7 @@
 Seed Script to add minios systems to netbox to be provisioned.
 
 1. Adds all minios systems that have an IP from ARP
-2. Script outputs IP and MINIOS so you can paste into /etc/hosts so script knows IP for SSH
+2. Script outputs IP and MINIOS so you can paste into /etc/hosts so the main script knows IP for SSH
 """
 
 import os
