@@ -1,4 +1,4 @@
-# netbox-scripts
+# netbox-scripts  (Work in Progress)
 
 Two scripts created to import Linux servers into NetBox. Tested on Ubuntu and CentOS. All hosts should have LLDP enabled so connections can be mapped in NetBox. 
 
