@@ -1,9 +1,0 @@
----
-inventory:
-  plugin: NetBoxInventory2
-  options:
-    ssl_verify: /etc/ssl/certs
-    filter_parameters: {"role": "switch-layer-3"}
-    
-runner:
-  plugin: serial
