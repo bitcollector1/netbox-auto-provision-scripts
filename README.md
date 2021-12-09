@@ -3,9 +3,10 @@
 Two scripts created to import Linux servers into NetBox. Tested on Ubuntu and CentOS. All hosts should have LLDP enabled so connections can be mapped in NetBox. 
 
 1) Seed NetBox with server data gathered with NorNir and Napalm via LLDP and ARP info. This script outputs hostame and IP address so you can paste 
-this info into your /etc/hosts file so that you don't need to have valid DNS entries for the next script. 
+this info into your /etc/hosts file so that you don't need to have valid DNS entries for the next script. You can just create a base system as indicated below and run the main provision script on that, there is no need to use the seed script. A basic CSV import will work as well. Keep in mind the script below still needs valid DNS working. The /etc/hosts file is a hack so you can SSH to the systems without creating IP and Interfaces, which the provision script will do for you.   
 
-###### Script must have a "Base" system in place. If you used the seed script you will also have IP's added to /etc/host file so no DNS is needed for SSH to work
+###### Provision script must have a "Base" system in place. If you used the seed script you will also have IP's you need to add to /etc/host file so no DNS is needed for SSH to work. 
+
 <img width="1271" alt="shell-system-no-interface-ip" src="https://user-images.githubusercontent.com/50723251/145331652-3e240612-b83e-4068-99f7-a5a0fd3469bc.png">
 
 ###### This is the parent chassis that the script is going to install the child server into, it will also add power connections and info based off server
