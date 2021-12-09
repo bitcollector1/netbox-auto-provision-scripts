@@ -6,7 +6,7 @@ Two scripts created to import Linux servers into NetBox. Tested on Ubuntu and Ce
  
 You can bypass the script and just create a base system (CSV Import) in NetBox as shown below and run the main provision script on that.  
 
-Keep in mind the main provision script still needs valid DNS working. The ARP seed script also has outputs data for you to put into /etc/hosts on your provisioning server so you can SSH to the systems without creating IP and Interfaces in NetBox since the script will do that for you anyway. It's a bit of a hack I stumbled across but seems to work well until I have time to change it.
+Keep in mind the main provision script still needs valid DNS working. The ARP seed script also outputs data for you to put into /etc/hosts on your provisioning server so you can SSH to the systems without creating IP and Interfaces in NetBox since the script will do that for you anyway. It's a bit of a hack I stumbled across but seems to work well until I have time to change it.
 
 ###### Provision script must have a "Base" system in place. If you used the seed script you will also have IP's you need to add to /etc/host file so no DNS is needed for SSH to work. 
 
