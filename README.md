@@ -2,9 +2,9 @@
 
 Two scripts created to import Linux servers into NetBox. Tested on Ubuntu and CentOS. All hosts should have LLDP enabled so connections can be mapped in NetBox. 
 
-The main provision script is intended to be run on a child device (server) that will be racked into a parent chassis. In our case since most of our servers are blade types we choose to rack 1 node systems into a parent chassis for overall consistency. This script was tested on 1 Node parent/child as well.    
-
 1) Seed NetBox with server data gathered with NorNir and Napalm via LLDP and ARP info. The minios script creates a base system in NetBox. 
+
+The main provision script is intended to be run on a child device (server) that will be racked into a parent chassis. In our case since most of our servers are blade types we choose to rack 1 node systems into a parent chassis for overall consistency. This script was tested on 1 Node parent/child as well.    
  
 You can bypass the script and just create a base system (CSV Import) in NetBox as shown below and run the main provision script on that.  
 
