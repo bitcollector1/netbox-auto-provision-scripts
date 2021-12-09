@@ -16,7 +16,7 @@ Device Type, Serial, Role, Rack, Status, and Custom Fields
 LLDP used to make the connections in netbox, ARP and IPMITOOL used to find ETH and BMC IP addresses
 <img width="1318" alt="LLDP-Interface-IP" src="https://user-images.githubusercontent.com/50723251/145328824-a5bd03de-3b8e-44d9-ab92-9c26fe7de321.png">
 
-Child Server is racked into the parent based off the chassis serial number. Set the node as a script option. Script still works if wrong node selcted.
+Child Server is racked into the parent based off the chassis serial number. Set the node as a script option. Script still works if wrong node selcted, it will just leave the system unracked. Run the script again with the correct node and it will slot it correctly.  
 <img width="1346" alt="Device Bay" src="https://user-images.githubusercontent.com/50723251/145328848-22ee95d7-09d0-45db-b7c8-20b6be4edde5.png">
 
 Power connections created on the chassis and max power and allocation also set.
