@@ -22,7 +22,7 @@ BMC interface and IP and it will also make the interface connections in NetBox b
 
 3) Still a work in progress as time allows but there are lots of things I'd like to fix in this script. It's a learning process and grew very organically. 
 
-Device Type, Serial, Role, Rack, Status, and Custom Fields 
+**Final State** with Device Type, Serial, Role, Rack, Status, and Custom Fields for BIOS and BMC info 
 <img width="1336" alt="System-Info" src="https://user-images.githubusercontent.com/50723251/145328806-d0c91468-20e1-4900-b501-bc4a86a45577.png">
 
 LLDP used to make the connections in netbox, ARP and IPMITOOL used to find ETH and BMC IP addresses
