@@ -8,6 +8,8 @@ this info into your /etc/hosts file so that you don't need to have valid DNS ent
 2) Gather all facts about a server and add them to NetBox. This includes manafucturer, product type, serial number, asset tags, ethernet interface and IP
 BMC interface and IP and it will also make the interface connections in NetBox based of LLDP information it finds so that you will be able to see the active LLDP  connections in NetBox GUI. 
 
+3) Still a work in progress as time allows but there are lots of things I'd like to fix in this script. It's a learning process and grew very organically. 
+
 Device Type, Serial, Role, Rack, Status, and Custom Fields 
 <img width="1336" alt="System-Info" src="https://user-images.githubusercontent.com/50723251/145328806-d0c91468-20e1-4900-b501-bc4a86a45577.png">
 
