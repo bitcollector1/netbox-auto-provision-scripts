@@ -7,3 +7,15 @@ this info into your /etc/hosts file so that you don't need to have valid DNS ent
 
 2) Gather all facts about a server and add them to NetBox. This includes manafucturer, product type, serial number, asset tags, ethernet interface and IP
 BMC interface and IP and it will also make the interface connections in NetBox based of LLDP information it finds so that you will be able to see the active LLDP  connections in NetBox GUI. 
+
+Device Type, Serial, Role, Rack, Status, and Custom Fields 
+<img width="1336" alt="System-Info" src="https://user-images.githubusercontent.com/50723251/145328806-d0c91468-20e1-4900-b501-bc4a86a45577.png">
+
+LLDP used to make the connections in netbox, ARP and IPMITOOL used to find ETH and BMC IP addresses
+<img width="1318" alt="LLDP-Interface-IP" src="https://user-images.githubusercontent.com/50723251/145328824-a5bd03de-3b8e-44d9-ab92-9c26fe7de321.png">
+
+Child Server is racked into the parent based off the chassis serial number. Set the node as a script option. Script still works if wrong node selcted.
+<img width="1346" alt="Device Bay" src="https://user-images.githubusercontent.com/50723251/145328848-22ee95d7-09d0-45db-b7c8-20b6be4edde5.png">
+
+Power connections created on the chassis and max power and allocation also set.
+<img width="1350" alt="Power-Chassis" src="https://user-images.githubusercontent.com/50723251/145328858-2aca0ed7-8586-4944-8f6a-c04a384521ed.png">
