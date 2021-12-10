@@ -36,9 +36,6 @@ node = input("Node Placement: NODE-A, NODE-B, NODE-C, NODE-D ?")
 
 host = nr.inventory.hosts
 
-# Hard coded - there is only 1 site on this case
-site_name = 'Platform Engineering Lab'
-
 # END ROLE of device
 device_role_name = 'server'
 
@@ -79,11 +76,14 @@ def create_interface(task: Task) -> Result:
     # format IP for NetBox
     nb_ip = str(ip_addy) + "/" + str(mask)
 
-    try:
-        if nb.ipam.ip_addresses.get(address=ip_addy) is None:
+    if not nb.ipam.ip_addresses.get(q=ip_addy, mask_length=24):
+        try:
             nb.ipam.ip_addresses.create({'address': nb_ip, 'status': 'reserved'})
-    except:
-        print(f"Error creating {nb_ip} in NetBox")
+            print(f"ETH Address {nb_ip} added to NetBox")
+        except:
+            print(f"Error creating ETH address {nb_ip} in NetBox")
+    else:
+        print(f"ETH address: {nb_ip} already exists in NetBox")
 
     # Find mac address
     eth_mac_address = task.run(netmiko_send_command, command_string=f"ifconfig -a {int_name} | grep ether")
@@ -150,13 +150,16 @@ def create_interface(task: Task) -> Result:
                     print(f"{i.name} RouterID:{i.id} ")
                     router_int_id = i.id
 
-        # Make the actual connection between the endpoints
-        try:
-            nb.dcim.cables.create(termination_a_type="dcim.interface", termination_b_type="dcim.interface",
-                                  termination_a_id=interface.id, termination_b_id=router_int_id)
-            print(f"{interface.id} successfully connected to {router_int_id}")
-        except:
-            print("Error making the network connection between endpoints, They may already be connected!")
+        if not nb.dcim.cables.get(termination_a_type="dcim.interface", termination_b_type="dcim.interface", termination_a_id=interface.id, termination_b_id=router_int_id):
+            # Make the actual connection between the endpoints
+            try:
+                nb.dcim.cables.create(termination_a_type="dcim.interface", termination_b_type="dcim.interface",
+                                      termination_a_id=interface.id, termination_b_id=router_int_id)
+                print(f"{interface.id} successfully connected to {router_int_id}")
+            except:
+                print("Error making the network connection between endpoints, They may already be connected!")
+        else:
+            print(f"Connections already found between {interface.id} and {router_int_id} ")
 
 
 def create_bmc_interface(task: Task) -> Result:
@@ -179,11 +182,14 @@ def create_bmc_interface(task: Task) -> Result:
     # format IP for NetBox
     nb_bmc_ip = str(bmc_ip) + "/" + str(bmc_mask)
 
-    try:
-        if nb.ipam.ip_addresses.get(address=bmc_ip) is None:
+    if not nb.ipam.ip_addresses.get(q=bmc_ip, mask_length=24):
+        try:
             nb.ipam.ip_addresses.create({'address': nb_bmc_ip, 'status': 'dhcp'})
-    except:
-        print(f"Error creating BMC {nb_bmc_ip} in NetBox, it may already exist this might not be fatal")
+            print(f"BMC IP Address {nb_bmc_ip} added to NetBox")
+        except:
+            print(f"Error creating BMC {nb_bmc_ip} in NetBox")
+    else:
+        print(f"BMC address: {nb_bmc_ip} already exists in NetBox")
 
     bmc_mac_address = task.run(netmiko_send_command, command_string="sudo ipmitool lan print | grep 'MAC Address'")
     bmc_mac = bmc_mac_address[0].result.split(" : ")[1]
@@ -191,25 +197,21 @@ def create_bmc_interface(task: Task) -> Result:
     bmc_interface = nb.dcim.interfaces.get(device=device.name, name='bmc')
 
     if bmc_interface is None:
-
         try:
             bmc_interface = nb.dcim.interfaces.create({'device': device.id, 'name': 'bmc', 'type': '1000base-t', 'mac_address': bmc_mac, 'mtu': '1500'})
             print(f"{bmc_interface} has been created with InterfaceID: {bmc_interface.id}")
         except:
             print(f"Error creating {bmc_interface} interface")
 
-    # no idea why this fails if I filter with address=bmc_ip
-    ip = nb.ipam.ip_addresses.filter(bmc_ip)
+    ip = nb.ipam.ip_addresses.get(q=bmc_ip, mask_length=24)
 
-    # Add IP Address to BMC interface
-    for i in ip:
-        try:
-            i.update({'assigned_object_type': 'dcim.interface', "assigned_object_id": bmc_interface.id,
-                     "assigned_object": bmc_interface.name, 'address': i.address})
+    try:
+        ip.update({'assigned_object_type': 'dcim.interface', "assigned_object_id": bmc_interface.id,
+                  "assigned_object": bmc_interface.name, 'address': ip.address})
 
-            print(f"Successfully added {i.address} to interface {bmc_interface.name}")
-        except:
-            print(f"Error updating {bmc_ip} BMC IP Address")
+        print(f"Successfully added {ip.address} to interface {bmc_interface.name}")
+    except:
+        print(f"Error updating BMC {bmc_ip} on interface {bmc_interface.name}")
 
 
 def custom_fields(task: Task) -> Result:
@@ -256,10 +258,6 @@ def update_server(task: Task) -> Result:
     Create Manufacturer and Product if it does not already exist
     Update Manufacturer, Product, Serial, Asset_Tag, OS_Version
     """
-    if not nb.dcim.sites.get(name=site_name):
-        print(f"Site Name: {site_name} is not valid, exiting!")
-        sys.exit()
-
     if not nb.dcim.device_roles.get(name=device_role_name):
         print(f"Device Role: {device_role_name} is not valid, exiting!")
         sys.exit()
@@ -361,11 +359,11 @@ def update_server(task: Task) -> Result:
 
     try:
         device.update({'name': device.name, 'device_role': {'name': device_role_name}, 'device_type': {'model': device_type},
-                       'status': device_status, 'site': {'name': site_name}, 'rack_name': parent.rack,
+                       'status': device_status, 'site': {'name': parent.site.name}, 'rack_name': parent.rack,
                        'serial': serial, 'asset_tag': asset, 'platform': {'name': platform_type},
                        'tenant': {'name': tenant_name}, 'tags': [{'name': os_ver}]})
 
-        print(f"Successfully updated Device:{device.name}")
+        print(f"Successfully updated Server Info for: {device.name}")
 
     except:
         print(f"Error updating the device info {device.name} {device_type} {asset} {parent.rack}")
@@ -376,6 +374,9 @@ def update_server(task: Task) -> Result:
     if nb.dcim.power_ports.get(id=parent.id) is None:
         primary_power = nb.dcim.power_ports.create({"device": parent.id, "name": "Primary Power Supply"})
         backup_power = nb.dcim.power_ports.create({"device": parent.id, "name": "Backup Power Supply"})
+    else:
+        primary_power = nb.dcim.power_ports.get({"device": parent.id, "name": "Primary Power Supply"})
+        backup_power = nb.dcim.power_ports.get({"device": parent.id, "name": "Backup Power Supply"})
 
     # Grab the max and allocated power draws too see if they are empty
     primary = nb.dcim.power_ports.get(id=primary_power.id)
@@ -385,8 +386,11 @@ def update_server(task: Task) -> Result:
     if primary.maximum_draw is None:
         allocated_power = int(max_power) / 4
         primary.update({'maximum_draw': max_power, 'allocated_draw': allocated_power})
+        print(f"Primary power supply updated with max power: {max_power}  allocated power: {allocated_power}")
+
     if backup.maximum_draw is None:
         backup.update({'maximum_draw': max_power, 'allocated_draw': allocated_power})
+        print(f"Backup power supply updated with max power: {max_power} allocated power: {allocated_power}")
 
 
 if __name__ == "__main__":
