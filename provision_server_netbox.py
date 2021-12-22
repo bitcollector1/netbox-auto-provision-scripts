@@ -17,7 +17,7 @@ from nornir_netmiko.tasks import netmiko_send_command
 session = requests.Session()
 session.verify = '/etc/ssl/certs'
 
-nb = pynetbox.api("https://your.netbox.com", "012345678909876543321234345356345")
+nb = pynetbox.api(os.getenv('NB_URL'), os.getenv('NB_TOKEN'))
 nb.http_session = session
 
 nr = InitNornir(config_file="nornir_nb_provision.yaml")
