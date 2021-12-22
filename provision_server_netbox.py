@@ -1,13 +1,10 @@
 """
 Script to update a server/minios details in NetBox.
 
-1. System needs to exist in netbox before you can update the details --> run the seed script if needed.
-2. LLDP needs to be enabled on the host for this script to properly make the network connections.
-3. Adjusted for serial processing due to random issues with the threads.
+1. LLDP needs to be enabled on the host for this script to properly make the network connections.
 """
 import os
 import sys
-import warnings
 import requests
 import pynetbox
 
@@ -16,23 +13,40 @@ from nornir import InitNornir
 from nornir.core.task import Task, Result
 from nornir_napalm.plugins.tasks import napalm_get
 from nornir_netmiko.tasks import netmiko_send_command
-from urllib3.exceptions import InsecureRequestWarning
-
-warnings.filterwarnings('ignore')
 
 session = requests.Session()
-session.verify = False
+session.verify = '/etc/ssl/certs'
 
-nb = pynetbox.api(os.getenv('NB_URL'), os.getenv('NB_TOKEN'))
+nb = pynetbox.api("https://your.netbox.com", "012345678909876543321234345356345")
 nb.http_session = session
 
-nr = InitNornir(config_file="../inventory/nornir_nb_servers.yaml")
+nr = InitNornir(config_file="nornir_nb_provision.yaml")
 
-nr.inventory.defaults.username = input("Enter Username: ")
-nr.inventory.defaults.password = input("Enter Password: ")
+nr.inventory.defaults.username = sys.argv[1]
+nr.inventory.defaults.password = sys.argv[2]
+ip_address = sys.argv[3]
+hostname = sys.argv[4]
+node = sys.argv[5]
 
-# Prompt user for Node placement
-node = input("Node Placement: NODE-A, NODE-B, NODE-C, NODE-D ?")
+# Default to Node A if choice is not made
+if not node:
+    node = 'NODE-A'
+
+# Code to get an IP onto the box so we can ssh via nornir
+nb_ips = nb.ipam.ip_addresses.filter(q=ip_address)
+
+# Code returns a record set so we need to grab the IP object so we can run update on it
+for i in nb_ips:
+    nb_ip = i
+
+# setup a dummy interface so nornir can ssh to the device without DNS
+dummy_int = nb.dcim.interfaces.create({'device': {'name': hostname}, 'name': 'eth0', 'type': '1000base-t'})
+
+# add IP address to system
+nb_ip.update({'assigned_object_type': 'dcim.interface', "assigned_object_id": dummy_int.id, "assigned_object": dummy_int.name, 'address': nb_ip.address})
+
+# END Tentant Name
+tenant_name = 'HWE'
 
 host = nr.inventory.hosts
 
@@ -45,11 +59,50 @@ device_status = 'active'
 # END Platform of device
 platform_type = 'linux'
 
-# END Tentant Name
-tenant_name = 'HWE'
 
-# Print host list to the screen for a sanity check
-print(host)
+# exit if no hosts found
+if len(host) < 1:
+    print("No Hosts Found!")
+    sys.exit(0)
+else:
+    print(host)
+
+def enable_lldp(task: Task) -> Result:
+  
+    device = nb.dcim.devices.get(name=task.host.name)
+
+    # Try and enable LLDP for all hosts
+    lldp_enable = task.run(netmiko_send_command, command_string = "sudo systemctl --now enable lldpd")
+    print(lldp_enable.result)
+    
+    # Configure LLDP to use ifname instead of the default --> mac address 
+    lldp_ifname = task.run(netmiko_send_command, command_string = "sudo lldpcli configure lldp portidsubtype ifname") 
+    
+    # Intel NIC's Hijack LLDP packets so we need to find the bus used
+    result = task.run(netmiko_send_command, command_string="sudo lspci | grep -i 'ethernet'")
+    nics = result[0].result.split("\n")[0]
+    
+    controller = nics.find('controller')
+    vendor = nics[controller:].split(" ")[1].lower()  # get first word after "controller:"
+    print(vendor)
+    
+    result = task.run(netmiko_send_command, command_string="lshw -class network -businfo")
+    bus_info = result[0].result
+
+    index = bus_info.find('pci@')                 # stores the index of a substring or char
+    interface = bus_info[index:].split("\n")      # returns the chars AFTER the seen char or substring
+    interface.pop()                               # WARNING: output may be incomplete or inaccurate 
+    
+    for i in interface:
+        interface_bus = (i.split()[0].replace("pci@0000:", ""))
+        interface_name = (i.split()[1].replace("pci@0000:", ""))
+        
+        if 'intel' in vendor:
+            # Stop Intel from Hijacking the LLDP Packets
+            FU_INTEL = (f" echo lldp stop | sudo tee -a /sys/kernel/debug/i40e/0000:{interface_bus}/command > /dev/null")
+        
+            task.run(netmiko_send_command, command_string = FU_INTEL)
+            print(FU_INTEL)
 
 
 def create_interface(task: Task) -> Result:
@@ -64,7 +117,7 @@ def create_interface(task: Task) -> Result:
     route = task.run(task=netmiko_send_command, command_string="route -n | grep -m 1 0.0.0.0")
     gateway = route[0].result.replace('0.0.0.0', "").strip().split(" ")[0]
     int_name = route[0].result.replace('0.0.0.0', "").strip().split(" ")[-1]
-
+    
     # Find IP Address and NetMask
     ip_mask_info = task.run(netmiko_send_command, command_string=f"ifconfig -a {int_name} | grep inet")
     ip_addy = ip_mask_info[0].result.split()[1]
@@ -76,7 +129,7 @@ def create_interface(task: Task) -> Result:
     # format IP for NetBox
     nb_ip = str(ip_addy) + "/" + str(mask)
 
-    if not nb.ipam.ip_addresses.get(q=ip_addy, mask_length=24):
+    if not nb.ipam.ip_addresses.get(q=ip_addy, mask_length=mask):
         try:
             nb.ipam.ip_addresses.create({'address': nb_ip, 'status': 'reserved'})
             print(f"ETH Address {nb_ip} added to NetBox")
@@ -145,7 +198,7 @@ def create_interface(task: Task) -> Result:
         interfaces = nb.dcim.interfaces.all()
 
         for i in interfaces:
-            if i.device.display == lldp_neighbor:
+            if i.device.name == lldp_neighbor:
                 if lldp_port in i.name:
                     print(f"{i.name} RouterID:{i.id} ")
                     router_int_id = i.id
@@ -157,10 +210,12 @@ def create_interface(task: Task) -> Result:
                                       termination_a_id=interface.id, termination_b_id=router_int_id)
                 print(f"{interface.id} successfully connected to {router_int_id}")
             except:
-                print("Error making the network connection between endpoints, They may already be connected!")
+                print(f"Error making the network connection between endpoints {interface.id} {router_int_id} ")
         else:
             print(f"Connections already found between {interface.id} and {router_int_id} ")
 
+    # remove dummy interface when no longer needed
+    dummy_int.delete()
 
 def create_bmc_interface(task: Task) -> Result:
     """
@@ -182,7 +237,7 @@ def create_bmc_interface(task: Task) -> Result:
     # format IP for NetBox
     nb_bmc_ip = str(bmc_ip) + "/" + str(bmc_mask)
 
-    if not nb.ipam.ip_addresses.get(q=bmc_ip, mask_length=24):
+    if not nb.ipam.ip_addresses.get(q=bmc_ip, mask_length=bmc_mask):
         try:
             nb.ipam.ip_addresses.create({'address': nb_bmc_ip, 'status': 'dhcp'})
             print(f"BMC IP Address {nb_bmc_ip} added to NetBox")
@@ -204,7 +259,7 @@ def create_bmc_interface(task: Task) -> Result:
             print(f"Error creating {bmc_interface} interface")
 
     ip = nb.ipam.ip_addresses.get(q=bmc_ip, mask_length=24)
-
+ 
     try:
         ip.update({'assigned_object_type': 'dcim.interface', "assigned_object_id": bmc_interface.id,
                   "assigned_object": bmc_interface.name, 'address': ip.address})
@@ -278,13 +333,13 @@ def update_server(task: Task) -> Result:
     device = nb.dcim.devices.get(name=task.host.name)
 
     system_manufacturer = task.run(netmiko_send_command, command_string="sudo dmidecode -s system-manufacturer")
-    manufacturer = system_manufacturer[0].result.lower()
+    manufacturer = system_manufacturer[0].result
 
-    if 'dell' in manufacturer:
-        manufacturer = 'dell'
+    if 'Dell' in manufacturer:
+        manufacturer = 'Dell'
 
     if 'Quanta' in manufacturer:
-        manufacturer = 'qct'
+        manufacturer = 'QCT'
 
     slug_vendor = manufacturer.lower().replace(" ", "-")
 
@@ -334,18 +389,21 @@ def update_server(task: Task) -> Result:
 
     # There is no child.parent_device at this point, we still have to set it
     parent = nb.dcim.devices.get(serial=chassis_serial)
+    
+    if parent:
+        if node is not None:
+            bay = nb.dcim.device_bays.get(device_id=parent.id, name=node)
 
-    if node is not None:
-        bay = nb.dcim.device_bays.get(device_id=parent.id, name=node)
+            if bay.installed_device is not None:
+                print(f"Error installing {child} into {parent}, Found existing device: {bay.installed_device}")
 
-        if bay.installed_device is not None:
-            print(f"Error installing {child} into {parent}, Found existing device: {bay.installed_device}")
-
-        if bay.installed_device is None:
-            bay.installed_device = child
-            if bay.save():
-                print(f"successfully installed: {child} into: {parent} Slot: {node}")
-
+            if bay.installed_device is None:
+                bay.installed_device = child
+                if bay.save():
+                    print(f"successfully installed: {child} into: {parent} Slot: {node}")
+    else: 
+        print ("No Parent Found to slot Node into, you will have to do this manually!")
+    
     release = task.run(netmiko_send_command, command_string="cat /etc/*release* | grep PRETTY_NAME")
     os_ver = release[0].result.split("=")[-1].replace("(Core)", "").strip('"').strip()
 
@@ -358,42 +416,66 @@ def update_server(task: Task) -> Result:
         print(f" Could not create the tag for{os_ver} {slug_os_name}")
 
     try:
-        device.update({'name': device.name, 'device_role': {'name': device_role_name}, 'device_type': {'model': device_type},
-                       'status': device_status, 'site': {'name': parent.site.name}, 'rack_name': parent.rack,
-                       'serial': serial, 'asset_tag': asset, 'platform': {'name': platform_type},
-                       'tenant': {'name': tenant_name}, 'tags': [{'name': os_ver}]})
-
+        if parent:
+            device.update({'name': device.name, 'device_role': {'name': device_role_name}, 'device_type': {'model': device_type},
+                           'status': device_status, 'site': {'name': parent.site.name}, 'rack_name': parent.rack,
+                           'serial': serial, 'asset_tag': asset, 'platform': {'name': platform_type},
+                           'tenant': {'name': tenant_name}, 'tags': [{'name': os_ver}]})
+        else: 
+            device.update({'name': device.name, 'device_role': {'name': device_role_name}, 'device_type': {'model': device_type},
+                           'status': device_status, 'site': {'name': "1103 Platform Engineering Lab"},
+                           'serial': serial, 'asset_tag': asset, 'platform': {'name': platform_type},
+                           'tenant': {'name': tenant_name}, 'tags': [{'name': os_ver}]})
+            
         print(f"Successfully updated Server Info for: {device.name}")
 
     except:
         print(f"Error updating the device info {device.name} {device_type} {asset} {parent.rack}")
-
+        
+    if not parent:
+        print("No parent defined, so no power can be added, Exiting!")
+        sys.exit(0)
+        
     result = task.run(netmiko_send_command, command_string="sudo dmidecode -t39 | grep 'Power Capacity'")
     max_power = result[0].result.split(":")[-1].strip('W').strip()
-
-    if nb.dcim.power_ports.get(id=parent.id) is None:
-        primary_power = nb.dcim.power_ports.create({"device": parent.id, "name": "Primary Power Supply"})
-        backup_power = nb.dcim.power_ports.create({"device": parent.id, "name": "Backup Power Supply"})
-    else:
-        primary_power = nb.dcim.power_ports.get({"device": parent.id, "name": "Primary Power Supply"})
-        backup_power = nb.dcim.power_ports.get({"device": parent.id, "name": "Backup Power Supply"})
-
-    # Grab the max and allocated power draws too see if they are empty
-    primary = nb.dcim.power_ports.get(id=primary_power.id)
-    backup = nb.dcim.power_ports.get(id=backup_power.id)
-
-    # Only update the power on the chassis if it is not already defined
-    if primary.maximum_draw is None:
-        allocated_power = int(max_power) / 4
-        primary.update({'maximum_draw': max_power, 'allocated_draw': allocated_power})
-        print(f"Primary power supply updated with max power: {max_power}  allocated power: {allocated_power}")
-
-    if backup.maximum_draw is None:
-        backup.update({'maximum_draw': max_power, 'allocated_draw': allocated_power})
-        print(f"Backup power supply updated with max power: {max_power} allocated power: {allocated_power}")
+    
+    if not max_power.isdigit():
+        print("No Power found")
+        sys.exit(0)
+    
+    if not nb.dcim.power_ports.filter(device=parent.name):
+        try: 
+            primary_power = nb.dcim.power_ports.create({"device": parent.id, "name": "Primary Power Supply"})
+            backup_power = nb.dcim.power_ports.create({"device": parent.id, "name": "Backup Power Supply"})
+        except: 
+            print(f"failed to create the power ports on {parent.name}")
+    
+    primary_power = nb.dcim.power_ports.get(q='Primary Power Supply', device=parent.name)
+    
+    if primary_power:
+        primary = nb.dcim.power_ports.get(id=primary_power.id)
+         
+        if primary.maximum_draw is None:
+            allocated_power = int(max_power) / 4
+            primary.update({'maximum_draw': max_power, 'allocated_draw': allocated_power})
+            print(f"Primary power supply updated with max power: {max_power}  allocated power: {allocated_power}") 
+        else:
+            print(f"Primary Power already defined Max:{primary.maximum_draw} Allocated: {primary.allocated_draw}")
+    
+    backup_power = nb.dcim.power_ports.get(q='Backup Power Supply', device= parent.name)
+    
+    if backup_power:     
+        backup = nb.dcim.power_ports.get(id=backup_power.id)
+            
+        if backup.maximum_draw is None:
+            backup.update({'maximum_draw': max_power, 'allocated_draw': allocated_power})
+            print(f"Backup power supply updated with max power: {max_power} allocated power: {allocated_power}")
+        else:
+            print(f"Backup Power already defined Max:{backup.maximum_draw} Allocated: {backup.allocated_draw}")
 
 
 if __name__ == "__main__":
+    nr.run(task=enable_lldp)
     nr.run(task=create_interface)
     nr.run(task=create_bmc_interface)
     nr.run(task=custom_fields)
