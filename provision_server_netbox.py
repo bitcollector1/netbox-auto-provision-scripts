@@ -28,6 +28,8 @@ ip_address = sys.argv[3]
 hostname = sys.argv[4]
 node = sys.argv[5]
 
+node = ''
+
 # Default to Node A if choice is not made
 if not node:
     node = 'NODE-A'
